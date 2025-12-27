@@ -18,6 +18,31 @@ type Props = {
   initialSource?: "auto" | "manual";
 };
 
+// Helpers "a prueba de balas" para no depender de campos exactos en WOKE_FLAGS
+function getFlagLabel(f: any): string {
+  return (
+    (typeof f?.label === "string" && f.label) ||
+    (typeof f?.name === "string" && f.name) ||
+    (typeof f?.title === "string" && f.title) ||
+    String(f?.id ?? "Flag")
+  );
+}
+
+function getFlagDesc(f: any): string {
+  return (
+    (typeof f?.desc === "string" && f.desc) ||
+    (typeof f?.hint === "string" && f.hint) ||
+    (typeof f?.description === "string" && f.description) ||
+    (typeof f?.subtitle === "string" && f.subtitle) ||
+    ""
+  );
+}
+
+function getFlagWeight(f: any): number {
+  const w = Number(f?.weight);
+  return Number.isFinite(w) ? w : 0;
+}
+
 export default function ReviewPanel({
   id,
   initialScore = 0,
@@ -37,22 +62,24 @@ export default function ReviewPanel({
   );
   const [notes, setNotes] = useState<string>(initialNotes ?? "");
 
-  // score auto en base a pesos de flags (si ya tienes otra lógica, aquí se ajusta)
+  // score auto en base a pesos de flags (si tus flags no tienen weight, será 0)
   const computedScore = useMemo(() => {
-    // suma pesos de las flags marcadas
-    const total = selectedFlags.reduce((acc, f) => {
-      const def = WOKE_FLAGS.find((x) => x.id === f);
-      return acc + (def?.weight ?? 0);
+    const total = selectedFlags.reduce((acc, fid) => {
+      const def: any = (WOKE_FLAGS as any[]).find((x) => x?.id === fid);
+      return acc + getFlagWeight(def);
     }, 0);
 
-    // normaliza a 0..10 (ajusta si quieres otra curva)
+    // Normaliza a 0..10 (aquí redondeo, ajusta si quieres curva distinta)
     const s = Math.max(0, Math.min(10, Math.round(total)));
     return s;
   }, [selectedFlags]);
 
   const scoreToShow = useMemo(() => {
-    // si venía manual, respetamos el inicial; si no, usamos computed
-    if (initialSource === "manual") return Math.max(0, Math.min(10, Number(initialScore) || 0));
+    // Si venía manual, respetamos ese score inicial; si no, usamos computed
+    if (initialSource === "manual") {
+      const n = Number(initialScore);
+      return Math.max(0, Math.min(10, Number.isFinite(n) ? n : 0));
+    }
     return computedScore;
   }, [initialSource, initialScore, computedScore]);
 
@@ -74,7 +101,6 @@ export default function ReviewPanel({
     setStatus({ type: "idle", msg: "" });
 
     try {
-      // Ajusta esta URL si tu endpoint es otro
       const res = await fetch("/api/review", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -131,22 +157,28 @@ export default function ReviewPanel({
         <div className="mt-4 space-y-4">
           {/* listado de flags */}
           <div className="grid gap-3">
-            {WOKE_FLAGS.map((f) => {
-              const checked = selectedFlags.includes(f.id);
+            {(WOKE_FLAGS as any[]).map((f) => {
+              const id = f?.id as WokeFlagId;
+              const checked = selectedFlags.includes(id);
+              const label = getFlagLabel(f);
+              const desc = getFlagDesc(f);
+
               return (
                 <label
-                  key={f.id}
+                  key={String(f?.id ?? label)}
                   className="flex items-start gap-3 rounded-xl border border-neutral-600 bg-neutral-900/30 p-3 cursor-pointer"
                 >
                   <input
                     type="checkbox"
                     checked={checked}
-                    onChange={() => toggleFlag(f.id)}
+                    onChange={() => toggleFlag(id)}
                     className="mt-1"
                   />
                   <div className="min-w-0">
-                    <div className="text-sm font-medium">{f.label}</div>
-                    <div className="text-xs text-neutral-300">{f.desc}</div>
+                    <div className="text-sm font-medium">{label}</div>
+                    {desc ? (
+                      <div className="text-xs text-neutral-300">{desc}</div>
+                    ) : null}
                   </div>
                 </label>
               );
@@ -187,9 +219,7 @@ export default function ReviewPanel({
             </button>
 
             {!safeId && (
-              <div className="text-xs text-amber-200">
-                Falta id (no se puede guardar).
-              </div>
+              <div className="text-xs text-amber-200">Falta id (no se puede guardar).</div>
             )}
 
             {status.type !== "idle" && (

@@ -4,6 +4,32 @@ import Flags from "@/components/Flags";
 import ReviewPanel from "./ReviewPanel";
 import { getAllTitles, getTitleById } from "@/lib/data";
 
+type TitleType = "movie" | "series";
+
+type WokeTitle = {
+  id: string;
+  tmdb_id?: number;
+  type: TitleType;
+  title: string;
+  year: number;
+
+  overview?: string;
+  overview_es?: string;
+  overview_en?: string;
+
+  poster_path?: string | null;
+  backdrop_path?: string | null;
+
+  genres?: string[];
+  keywords?: string[];
+
+  woke_score: number;
+  flags?: string[];
+  notes?: string;
+
+  score_source?: "auto" | "manual";
+};
+
 function scoreBucket(score: number) {
   if (score >= 6) return { label: "Alto", hint: "Carga ideológica explícita" };
   if (score >= 3) return { label: "Mixto", hint: "Presencia moderada o contextual" };
@@ -107,7 +133,7 @@ export default async function TitlePage({
   const id = decodeURIComponent(rawId ?? "");
 
   const total = getAllTitles().length;
-  const t: any = getTitleById(id);
+  const t = getTitleById(id) as WokeTitle | undefined;
 
   if (!t) {
     return (
@@ -143,11 +169,11 @@ export default async function TitlePage({
   }
 
   const bucket = scoreBucket(t.woke_score);
-  const flags = t.flags ?? [];
+  const flags = Array.isArray(t.flags) ? t.flags : [];
   const synopsis = t.overview_es || t.overview || t.overview_en || "Sin sinopsis disponible.";
 
-  const genres = Array.isArray(t.genres) ? (t.genres as string[]) : [];
-  const keywords = Array.isArray(t.keywords) ? (t.keywords as string[]) : [];
+  const genres = Array.isArray(t.genres) ? t.genres : [];
+  const keywords = Array.isArray(t.keywords) ? t.keywords : [];
   const tags = [...genres, ...keywords].filter(Boolean);
 
   const backdrop_path = t.backdrop_path ?? null;
@@ -182,7 +208,11 @@ export default async function TitlePage({
 
             <div className="flex items-center gap-3">
               <MiniBar score={t.woke_score} />
-              <div className={`rounded-xl border px-3 py-2 text-xs text-center ${scorePillStyles(t.woke_score)}`}>
+              <div
+                className={`rounded-xl border px-3 py-2 text-xs text-center ${scorePillStyles(
+                  t.woke_score
+                )}`}
+              >
                 <div className="font-semibold">{t.woke_score.toFixed(1)}/10</div>
                 <div className="text-[11px] text-neutral-200/90">
                   {bucket.label} · {(t.score_source ?? "auto") === "auto" ? "Auto" : "Revisado"}
@@ -220,7 +250,14 @@ export default async function TitlePage({
           </p>
         </section>
 
-        <ReviewPanel title id={t.id} />
+        {/* ✅ ReviewPanel: props correctas */}
+        <ReviewPanel
+          id={t.id}
+          initialScore={t.woke_score}
+          initialFlags={t.flags ?? []}
+          initialNotes={t.notes ?? ""}
+          initialSource={t.score_source ?? "auto"}
+        />
 
         <footer className="pt-2 text-xs text-neutral-400">
           Indicador informativo. Aquí no se juzga, se informa.
