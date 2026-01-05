@@ -43,6 +43,10 @@ function getFlagWeight(f: any): number {
   return Number.isFinite(w) ? w : 0;
 }
 
+function clamp(n: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, n));
+}
+
 export default function ReviewPanel({
   id,
   initialScore = 0,
@@ -62,32 +66,44 @@ export default function ReviewPanel({
   );
   const [notes, setNotes] = useState<string>(initialNotes ?? "");
 
-  // score auto en base a pesos de flags (si tus flags no tienen weight, será 0)
+  // ✅ nuevo: modo score
+  const [scoreMode, setScoreMode] = useState<"auto" | "manual">(
+    initialSource === "manual" ? "manual" : "auto"
+  );
+
+  // ✅ nuevo: score manual editable (slider/stepper)
+  const [manualScore, setManualScore] = useState<number>(() => {
+    const n = Number(initialScore);
+    return clamp(Number.isFinite(n) ? n : 0, 0, 10);
+  });
+
+  // score auto en base a pesos de flags
   const computedScore = useMemo(() => {
     const total = selectedFlags.reduce((acc, fid) => {
       const def: any = (WOKE_FLAGS as any[]).find((x) => x?.id === fid);
       return acc + getFlagWeight(def);
     }, 0);
 
-    // Normaliza a 0..10 (aquí redondeo, ajusta si quieres curva distinta)
-    const s = Math.max(0, Math.min(10, Math.round(total)));
+    const s = clamp(Math.round(total), 0, 10);
     return s;
   }, [selectedFlags]);
 
   const scoreToShow = useMemo(() => {
-    // Si venía manual, respetamos ese score inicial; si no, usamos computed
-    if (initialSource === "manual") {
-      const n = Number(initialScore);
-      return Math.max(0, Math.min(10, Number.isFinite(n) ? n : 0));
-    }
-    return computedScore;
-  }, [initialSource, initialScore, computedScore]);
+    return scoreMode === "manual"
+      ? clamp(manualScore, 0, 10)
+      : clamp(computedScore, 0, 10);
+  }, [scoreMode, manualScore, computedScore]);
 
   function toggleFlag(flagId: WokeFlagId) {
     setSelectedFlags((prev) => {
       const has = prev.includes(flagId);
       return has ? prev.filter((x) => x !== flagId) : [...prev, flagId];
     });
+    setStatus({ type: "idle", msg: "" });
+  }
+
+  function bumpScore(delta: number) {
+    setManualScore((s) => clamp(Math.round((s + delta) * 10) / 10, 0, 10));
     setStatus({ type: "idle", msg: "" });
   }
 
@@ -109,7 +125,7 @@ export default function ReviewPanel({
           flags: selectedFlags,
           notes: notes ?? "",
           woke_score: scoreToShow,
-          score_source: "manual", // al guardar, pasa a "revisado"
+          score_source: scoreMode, // ✅ auto/manual según tu elección
           pin: pin ?? "",
         }),
       });
@@ -141,7 +157,7 @@ export default function ReviewPanel({
         <div>
           <div className="text-sm font-semibold">Revisión editorial</div>
           <div className="text-xs text-neutral-300">
-            Marca flags y añade notas. (Requiere PIN para guardar)
+            Marca flags, ajusta el score (Auto o Manual) y añade notas. (PIN para guardar)
           </div>
         </div>
 
@@ -155,6 +171,90 @@ export default function ReviewPanel({
 
       {open && (
         <div className="mt-4 space-y-4">
+          {/* ✅ Score mode + score control */}
+          <div className="rounded-2xl border border-neutral-600 bg-neutral-900/25 p-3 space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <div className="text-sm font-semibold">Score</div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setScoreMode("auto")}
+                  className={`rounded-lg border px-3 py-1 text-xs transition ${
+                    scoreMode === "auto"
+                      ? "border-emerald-300/40 bg-emerald-500/10 text-emerald-100"
+                      : "border-neutral-600 bg-neutral-900/40 text-neutral-200 hover:bg-neutral-900/60"
+                  }`}
+                >
+                  Auto
+                </button>
+                <button
+                  onClick={() => setScoreMode("manual")}
+                  className={`rounded-lg border px-3 py-1 text-xs transition ${
+                    scoreMode === "manual"
+                      ? "border-amber-300/40 bg-amber-500/10 text-amber-100"
+                      : "border-neutral-600 bg-neutral-900/40 text-neutral-200 hover:bg-neutral-900/60"
+                  }`}
+                >
+                  Manual
+                </button>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between gap-3">
+              <div className="text-xs text-neutral-300">
+                {scoreMode === "auto"
+                  ? "Auto = se calcula según flags (si tus flags no tienen peso, quedará bajo)."
+                  : "Manual = tú decides el número, con o sin flags."}
+              </div>
+              <div className="text-sm text-neutral-100">
+                <span className="font-semibold">{scoreToShow.toFixed(1)}</span>/10
+              </div>
+            </div>
+
+            {/* Controles manuales */}
+            <div className={`${scoreMode === "manual" ? "" : "opacity-40 pointer-events-none"} space-y-2`}>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => bumpScore(-0.5)}
+                  className="rounded-lg border border-neutral-600 bg-neutral-900/40 px-3 py-2 text-xs hover:bg-neutral-900/60 transition"
+                >
+                  −0.5
+                </button>
+
+                <input
+                  type="range"
+                  min={0}
+                  max={10}
+                  step={0.5}
+                  value={manualScore}
+                  onChange={(e) => setManualScore(Number(e.target.value))}
+                  className="w-full"
+                />
+
+                <button
+                  onClick={() => bumpScore(+0.5)}
+                  className="rounded-lg border border-neutral-600 bg-neutral-900/40 px-3 py-2 text-xs hover:bg-neutral-900/60 transition"
+                >
+                  +0.5
+                </button>
+
+                <input
+                  type="number"
+                  min={0}
+                  max={10}
+                  step={0.5}
+                  value={manualScore}
+                  onChange={(e) => setManualScore(clamp(Number(e.target.value || 0), 0, 10))}
+                  className="w-20 rounded-lg bg-neutral-900/70 border border-neutral-600 px-2 py-2 text-xs outline-none"
+                />
+              </div>
+
+              <div className="text-[11px] text-neutral-400">
+                Consejo: usa Manual cuando “se nota” pero no quieres forzar flags.
+              </div>
+            </div>
+          </div>
+
           {/* listado de flags */}
           <div className="grid gap-3">
             {(WOKE_FLAGS as any[]).map((f) => {
@@ -176,18 +276,11 @@ export default function ReviewPanel({
                   />
                   <div className="min-w-0">
                     <div className="text-sm font-medium">{label}</div>
-                    {desc ? (
-                      <div className="text-xs text-neutral-300">{desc}</div>
-                    ) : null}
+                    {desc ? <div className="text-xs text-neutral-300">{desc}</div> : null}
                   </div>
                 </label>
               );
             })}
-          </div>
-
-          {/* score calculado */}
-          <div className="text-sm text-neutral-200">
-            Score calculado: <span className="font-semibold">{scoreToShow}/10</span>
           </div>
 
           {/* pin + notas */}

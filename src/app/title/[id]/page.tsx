@@ -3,79 +3,7 @@ import Image from "next/image";
 import Flags from "@/components/Flags";
 import ReviewPanel from "./ReviewPanel";
 import { getAllTitles, getTitleById } from "@/lib/data";
-
-type TitleType = "movie" | "series";
-
-type WokeTitle = {
-  id: string;
-  tmdb_id?: number;
-  type: TitleType;
-  title: string;
-  year: number;
-
-  overview?: string;
-  overview_es?: string;
-  overview_en?: string;
-
-  poster_path?: string | null;
-  backdrop_path?: string | null;
-
-  genres?: string[];
-  keywords?: string[];
-
-  woke_score: number;
-  flags?: string[];
-  notes?: string;
-
-  score_source?: "auto" | "manual";
-};
-
-function scoreBucket(score: number) {
-  if (score >= 6) return { label: "Alto", hint: "Carga ideológica explícita" };
-  if (score >= 3) return { label: "Mixto", hint: "Presencia moderada o contextual" };
-  return { label: "Bajo", hint: "Baja carga ideológica" };
-}
-
-function MiniBar({ score }: { score: number }) {
-  const s = Math.max(0, Math.min(10, score));
-  const pct = (s / 10) * 100;
-
-  return (
-    <div className="relative w-28">
-      <div
-        className="absolute -top-2 w-0 h-0 border-x-[6px] border-x-transparent border-b-[10px] border-b-neutral-100/80"
-        style={{ left: `calc(${pct}% - 6px)` }}
-      />
-      <div className="h-2 w-full overflow-hidden rounded-full border border-neutral-500 flex">
-        <div className="w-1/3 bg-emerald-400" />
-        <div className="w-1/3 bg-amber-400" />
-        <div className="w-1/3 bg-red-400" />
-      </div>
-    </div>
-  );
-}
-
-function scorePillStyles(score: number) {
-  if (score >= 6) return "border-red-300/40 bg-red-500/10 text-red-100";
-  if (score >= 3) return "border-amber-300/40 bg-amber-500/10 text-amber-100";
-  return "border-emerald-300/40 bg-emerald-500/10 text-emerald-100";
-}
-
-function TagChips({ items }: { items: string[] }) {
-  if (!items?.length) return null;
-  return (
-    <div className="flex flex-wrap gap-2">
-      {items.slice(0, 14).map((x) => (
-        <span
-          key={x}
-          className="rounded-lg border border-neutral-600 bg-neutral-900/40 px-2 py-1 text-[11px] text-neutral-200"
-        >
-          {x}
-        </span>
-      ))}
-    </div>
-  );
-}
+import WokeLevelPanelClient from "./WokeLevelPanelClient";
 
 function tmdbImg(
   path?: string | null,
@@ -124,6 +52,27 @@ function BackdropBlur({ backdrop_path, title }: { backdrop_path?: string | null;
   );
 }
 
+function pickCompany(t: any) {
+  const arr = Array.isArray(t?.production_companies) ? t.production_companies : [];
+  const first = arr.find((x: any) => x?.name) || arr[0];
+  return first?.name ? String(first.name) : "";
+}
+
+function pickDirector(t: any) {
+  // si el script metió credits
+  const crew = Array.isArray(t?.credits?.crew) ? t.credits.crew : Array.isArray(t?.crew) ? t.crew : [];
+  const d = crew.find((x: any) => x?.job === "Director" && x?.name) || crew.find((x: any) => x?.department === "Directing" && x?.name);
+  return d?.name ? String(d.name) : "";
+}
+
+function pickWriter(t: any) {
+  const crew = Array.isArray(t?.credits?.crew) ? t.credits.crew : Array.isArray(t?.crew) ? t.crew : [];
+  const w =
+    crew.find((x: any) => (x?.job === "Writer" || x?.job === "Screenplay" || x?.job === "Story") && x?.name) ||
+    crew.find((x: any) => x?.department === "Writing" && x?.name);
+  return w?.name ? String(w.name) : "";
+}
+
 export default async function TitlePage({
   params,
 }: {
@@ -133,7 +82,7 @@ export default async function TitlePage({
   const id = decodeURIComponent(rawId ?? "");
 
   const total = getAllTitles().length;
-  const t = getTitleById(id) as WokeTitle | undefined;
+  const t: any = getTitleById(id);
 
   if (!t) {
     return (
@@ -143,11 +92,9 @@ export default async function TitlePage({
             ← Volver
           </Link>
 
-          <section className="rounded-2xl bg-neutral-700/60 p-5">
+          <section className="rounded-2xl bg-neutral-700/60 p-5 ring-1 ring-white/5">
             <h1 className="text-xl font-semibold">Título no encontrado</h1>
-            <p className="mt-2 text-sm text-neutral-300">
-              Este ID no existe en la base local (todavía).
-            </p>
+            <p className="mt-2 text-sm text-neutral-300">Este ID no existe en la base local (todavía).</p>
 
             <div className="mt-4 rounded-xl bg-neutral-900/40 p-3 text-xs text-neutral-300">
               <div>
@@ -168,15 +115,29 @@ export default async function TitlePage({
     );
   }
 
-  const bucket = scoreBucket(t.woke_score);
-  const flags = Array.isArray(t.flags) ? t.flags : [];
-  const synopsis = t.overview_es || t.overview || t.overview_en || "Sin sinopsis disponible.";
+  const score = typeof t.woke_score === "number" ? t.woke_score : 0;
+  const flags = Array.isArray(t.flags) ? (t.flags as string[]) : [];
 
-  const genres = Array.isArray(t.genres) ? t.genres : [];
-  const keywords = Array.isArray(t.keywords) ? t.keywords : [];
-  const tags = [...genres, ...keywords].filter(Boolean);
+  const synopsis =
+    t.overview_es ||
+    t.overview ||
+    t.overview_en ||
+    "Sin sinopsis disponible.";
 
-  const backdrop_path = t.backdrop_path ?? null;
+  // Tags (si siguen existiendo en tu base)
+  const genres = Array.isArray(t.genres) ? (t.genres as string[]) : [];
+  const keywords = Array.isArray(t.keywords) ? (t.keywords as string[]) : [];
+  const tags = [...genres, ...keywords].filter(Boolean).slice(0, 18);
+
+  const editorialLine =
+    "El nivel mide cuánto el mensaje condiciona la obra (tono moral, jerarquía de personajes y sacrificio de coherencia narrativa), incluso sin agenda explícita.";
+
+  const sourceText =
+    (t.score_source ?? "auto") === "auto" ? "Cálculo automático" : "Revisado manualmente";
+
+  const company = pickCompany(t);
+  const director = pickDirector(t);
+  const writer = pickWriter(t);
 
   return (
     <main className="min-h-screen bg-neutral-800 p-4 text-neutral-100">
@@ -185,9 +146,9 @@ export default async function TitlePage({
           ← Volver
         </Link>
 
-        {/* HERO con backdrop difuminado */}
-        <section className="relative rounded-3xl bg-neutral-700/40 ring-1 ring-white/5 p-4 md:p-5">
-          <BackdropBlur backdrop_path={backdrop_path} title={t.title} />
+        {/* HERO */}
+        <section className="relative rounded-3xl bg-neutral-900/25 ring-1 ring-white/5 p-4 md:p-5">
+          <BackdropBlur backdrop_path={t.backdrop_path ?? null} title={t.title} />
 
           <div className="flex items-start gap-4">
             <PosterHero poster_path={t.poster_path ?? null} title={t.title} />
@@ -197,66 +158,46 @@ export default async function TitlePage({
               <div className="text-sm text-neutral-200/90">
                 {t.year} · {t.type === "movie" ? "Película" : "Serie"}
               </div>
+
+              {/* Datos TMDB enriquecidos */}
+              {company && <div className="text-sm text-neutral-200/90">Productora: {company}</div>}
+              {director && <div className="text-sm text-neutral-200/90">Director: {director}</div>}
+              {writer && <div className="text-sm text-neutral-200/90">Guion: {writer}</div>}
             </div>
           </div>
         </section>
 
-        {/* Indicador */}
-        <section className="rounded-2xl bg-neutral-700/60 p-4 space-y-3 ring-1 ring-white/5">
-          <div className="flex items-center justify-between gap-4">
-            <div className="text-sm text-neutral-300">Wokeómetro</div>
+        {/* PANEL NIVEL WOKE (animación + encendido) */}
+        <WokeLevelPanelClient
+          titleId={t.id}
+          targetScore={score}
+          sourceText={sourceText}
+          editorialLine={editorialLine}
+          flags={flags}
+          tags={tags}
+        />
 
-            <div className="flex items-center gap-3">
-              <MiniBar score={t.woke_score} />
-              <div
-                className={`rounded-xl border px-3 py-2 text-xs text-center ${scorePillStyles(
-                  t.woke_score
-                )}`}
-              >
-                <div className="font-semibold">{t.woke_score.toFixed(1)}/10</div>
-                <div className="text-[11px] text-neutral-200/90">
-                  {bucket.label} · {(t.score_source ?? "auto") === "auto" ? "Auto" : "Revisado"}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {flags.length > 0 ? (
-            <Flags flags={flags} />
-          ) : (
-            <div className="text-xs text-neutral-400">Sin indicadores marcados.</div>
-          )}
-        </section>
-
-        {/* Sinopsis */}
-        <section className="rounded-2xl bg-neutral-700/60 p-4 ring-1 ring-white/5">
-          <h2 className="text-sm font-semibold mb-2">Sinopsis</h2>
+        {/* SINOPSIS (simple, sin useState aquí para no romper Next) */}
+        <section className="rounded-2xl bg-neutral-900/30 ring-1 ring-white/5 p-4">
+          <h2 className="text-sm font-semibold mb-2 tracking-wide text-neutral-200/90">SINOPSIS</h2>
           <p className="text-sm text-neutral-200 leading-relaxed">{synopsis}</p>
         </section>
 
-        {/* Tags debajo de sinopsis */}
-        {tags.length > 0 && (
-          <section className="rounded-2xl bg-neutral-700/60 p-4 ring-1 ring-white/5">
-            <h2 className="text-sm font-semibold mb-2">Temas y etiquetas</h2>
-            <TagChips items={tags} />
-          </section>
-        )}
-
-        {/* Revisión editorial */}
-        <section className="rounded-2xl bg-neutral-700/60 p-4 ring-1 ring-white/5">
-          <h2 className="text-sm font-semibold mb-2">Revisión editorial</h2>
-          <p className="text-xs text-neutral-300">
-            {t.notes?.trim() ? t.notes : "Sin notas editoriales."}
+        {/* ACLARACIÓN (tu texto editorial al usuario) */}
+        <section className="rounded-2xl bg-neutral-900/30 ring-1 ring-white/5 p-4">
+          <h2 className="text-sm font-semibold mb-2 tracking-wide text-neutral-200/90">ACLARACIÓN</h2>
+          <p className="text-sm text-neutral-200 leading-relaxed">
+            {t.notes?.trim() ? t.notes : "Sin aclaración editorial todavía."}
           </p>
         </section>
 
-        {/* ✅ ReviewPanel: props correctas */}
+        {/* PANEL DE REVISIÓN (tu herramienta, con PIN) */}
         <ReviewPanel
           id={t.id}
-          initialScore={t.woke_score}
-          initialFlags={t.flags ?? []}
+          initialScore={score}
+          initialFlags={flags}
           initialNotes={t.notes ?? ""}
-          initialSource={t.score_source ?? "auto"}
+          initialSource={(t.score_source ?? "auto") as any}
         />
 
         <footer className="pt-2 text-xs text-neutral-400">

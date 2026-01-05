@@ -1,8 +1,8 @@
 @import "tailwindcss";
 
-/* =========================
+/* ===========================
    Variables base del tema
-   ========================= */
+=========================== */
 :root {
   --background: #f7f7f7;
   --foreground: #171717;
@@ -11,9 +11,9 @@
     Roboto, Helvetica, Arial, sans-serif;
 }
 
-/* =========================
+/* ===========================
    Modo oscuro (principal)
-   ========================= */
+=========================== */
 @media (prefers-color-scheme: dark) {
   :root {
     --background: #1f1f1f; /* más claro que #0a0a0a */
@@ -21,15 +21,18 @@
   }
 }
 
-/* =========================
+/* ===========================
    Body
-   ========================= */
+=========================== */
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-inter);
 }
 
+/* ===========================
+   Ola animada del texto
+=========================== */
 @keyframes wave {
   0% {
     transform: translateX(-100%);
@@ -41,5 +44,172 @@ body {
 
 .animate-wave {
   animation: wave 2.2s ease-in-out infinite;
+}
+
+/* ===========================
+   Animación logo (pop rápido)
+=========================== */
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-scale-in {
+  animation: scaleIn 0.35s ease-out forwards;
+}
+
+/* Accesibilidad: reduce motion */
+@media (prefers-reduced-motion: reduce) {
+  .animate-wave,
+  .animate-scale-in {
+    animation: none !important;
+  }
+}
+/* ===========================
+   Splash: texto cae + Wo rebote
+=========================== */
+
+/* Texto visible al inicio */
+.splash-text-drop {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  filter: blur(0px);
+}
+
+/* Texto cae “como gota” al fondo y desaparece */
+.splash-text-drop-out {
+  animation: dropOut 780ms cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+
+@keyframes dropOut {
+  0% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0px);
+  }
+  70% {
+    opacity: 0.35;
+    transform: translateY(38px) scale(0.98);
+    filter: blur(0.6px);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(88px) scale(0.94);
+    filter: blur(1.4px);
+  }
+}
+
+/* Wo oculto antes de entrar */
+.splash-wo-hidden {
+  opacity: 0;
+  transform: translateY(22px) scale(0.9);
+}
+
+/* Wo entra con rebote suave y curva de velocidad al final */
+.splash-wo-in {
+  animation: woBounceIn 520ms cubic-bezier(0.2, 0.9, 0.2, 1) forwards;
+}
+
+/* Rebote: pasa un pelín y vuelve */
+@keyframes woBounceIn {
+  0% {
+    opacity: 0;
+    transform: translateY(22px) scale(0.88);
+    filter: blur(0.6px);
+  }
+  65% {
+    opacity: 1;
+    transform: translateY(-6px) scale(1.03);
+    filter: blur(0px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Accesibilidad */
+@media (prefers-reduced-motion: reduce) {
+  .splash-text-drop-out,
+  .splash-wo-in {
+    animation: none !important;
+  }
+}
+/* ===========================
+   Splash motion: gota + rebote
+=========================== */
+
+/* Entrada suave del texto (muy corta) */
+.splash-text-in {
+  animation: textIn 260ms ease-out forwards;
+}
+@keyframes textIn {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Salida tipo gota: cae, se encoge, blur y desaparece */
+.splash-text-drop {
+  animation: textDrop 800ms cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+@keyframes textDrop {
+  0% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0px);
+  }
+  60% {
+    opacity: 0.45;
+    transform: translateY(34px) scale(0.985);
+    filter: blur(0.6px);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(92px) scale(0.93);
+    filter: blur(1.4px);
+  }
+}
+
+/* Wo oculto antes de entrar */
+.splash-wo-hidden {
+  opacity: 0;
+  transform: translateY(26px) scale(0.88);
+  filter: blur(0.6px);
+}
+
+/* Wo entra con rebote suave (curva final suave) */
+.splash-wo-in {
+  animation: woBounce 520ms cubic-bezier(0.2, 0.9, 0.2, 1) forwards;
+}
+@keyframes woBounce {
+  0% {
+    opacity: 0;
+    transform: translateY(26px) scale(0.88);
+    filter: blur(0.6px);
+  }
+  65% {
+    opacity: 1;
+    transform: translateY(-6px) scale(1.03);
+    filter: blur(0px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Accesibilidad */
+@media (prefers-reduced-motion: reduce) {
+  .splash-text-in,
+  .splash-text-drop,
+  .splash-wo-in {
+    animation: none !important;
+  }
 }
 
